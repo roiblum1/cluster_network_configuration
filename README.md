@@ -1,290 +1,255 @@
-# Cluster Network Configuration Scripts
+# Cluster Network Auto Configurator
 
-Two Python scripts for managing cluster network configurations with VLAN allocation.
+Automated VLAN allocation and network configuration tool for OpenShift clusters managed by MCE (Multi-Cluster Engine).
 
-## Scripts Overview
+## Overview
 
-### 1. `cluster_network_configurator.py` - Simple Single-Cluster Script
-**Use for**: Manual configuration of individual clusters
+This tool automatically:
+- Allocates VLANs for clusters via VLAN Manager API
+- Updates cluster YAML files with `vlanId` and `Networks` configuration
+- Creates bidirectional network rules between clusters and their MCE instances
+- Maintains idempotency (safe to run multiple times)
 
-**Usage**:
+## Features
+
+- **Production-ready**: Direct integration with VLAN Manager API
+- **Idempotent**: Running multiple times produces the same result
+- **Smart updates**: Only updates YAML when values change
+- **Segment caching**: Fetches all segments once to minimize API calls
+- **Dry-run mode**: Preview changes before applying
+- **Edge case handling**: Continues with vlanId insertion even if MCE segment is missing
+- **Authentication**: HTTP Basic Auth support
+
+## Requirements
+
+- Python 3.7+
+- `requests` library
+- `PyYAML` library
+- Access to VLAN Manager API
+
+## Installation
+
 ```bash
-python cluster_network_configurator.py <cluster_name> <cluster_segment>
+pip install requests pyyaml
 ```
 
-**Example**:
+## Usage
+
+### Basic Usage
+
 ```bash
-python cluster_network_configurator.py ocp4-roi-3 10.8.150.0/24
+python3 cluster_network_auto_configurator_production.py --api-url http://0.0.0.0:8000/api
 ```
 
-**Features**:
-- ✅ Processes one cluster at a time
-- ✅ Extracts MCE name from directory structure
-- ✅ Makes API calls to VLAN manager (with graceful fallback)
-- ✅ Adds Networks configuration to YAML bottom
-- ✅ Skips files that already have Networks configured
+### Dry Run Mode
 
----
+Preview changes without modifying files:
 
-### 2. `cluster_network_auto_configurator_final.py` - Production Batch Script
-**Use for**: Automated processing of all clusters in infrastructure
-
-**Usage**:
 ```bash
-# Dry-run mode (test without changes)
-python cluster_network_auto_configurator_final.py --dry-run
-
-# Production mode
-python cluster_network_auto_configurator_final.py
-
-# With custom log level
-python cluster_network_auto_configurator_final.py --log-level WARNING
-
-# With custom API URL
-python cluster_network_auto_configurator_final.py --api-url http://vlan-manager.company.com/api
+python3 cluster_network_auto_configurator_production.py --api-url http://0.0.0.0:8000/api --dry-run
 ```
 
-**Features**:
-- ✅ Scans all clusters automatically
-- ✅ Allocates VLAN segments via API
-- ✅ Adds vlanId and Networks to YAML files
-- ✅ Respects `AutomaticAllocation: false` setting
-- ✅ Production-ready error handling
-- ✅ Optimized logging for large environments
-- ✅ Dry-run mode for testing
-- ✅ Automatic backup/restore on failures
-- ✅ Skips already-configured files
+### Command Line Options
 
----
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--api-url` | VLAN Manager API URL | `http://0.0.0.0:8000/api` |
+| `--dry-run` | Preview changes without modifying files | `False` |
+
+## Configuration
+
+### Constants (edit in script)
+
+```python
+# API Configuration
+DEFAULT_VRF = "Network1"
+DEFAULT_API_URL = "http://0.0.0.0:8000/api"
+DEFAULT_API_USERNAME = "admin"
+DEFAULT_API_PASSWORD = "admin"
+
+# Network Configuration
+DEFAULT_DOMAIN = "default"
+DEFAULT_PORTS = [
+    {"type": "port", "number": 80, "protocol": "TCP"},
+    {"type": "port", "number": 8080, "protocol": "TCP"}
+]
+
+# Path Navigation
+MCE_TENANT_DIR_VARIANTS = ["mce-tenant-clusters", "mce-tenant-cluster"]
+MCE_ENVIRONMENTS = ["mce-prod", "mce-prep"]
+```
 
 ## Directory Structure
 
-The scripts expect this structure:
+The script expects the following directory structure:
+
 ```
 sites/
 ├── site1/
-│   └── mce-tenant-clusters/
+│   └── mce-tenant-clusters/  (or mce-tenant-cluster)
 │       ├── mce-prod/
-│       │   ├── ocp4-mce-site1/
-│       │   │   └── ocp4-roi-3.yaml
-│       │   └── mce-test-1/
-│       │       └── ocp4-roi.yaml
+│       │   └── mce-name/
+│       │       └── ocp4-cluster-1.yaml
 │       └── mce-prep/
-│           └── mce-test-2/
-│               └── ocp4-roi-2.yaml
-└── datacenter1/
+│           └── mce-name/
+│               └── ocp4-cluster-2.yaml
+├── site2/
+│   └── mce-tenant-clusters/
+│       └── ...
+└── site3/
     └── mce-tenant-clusters/
-        └── mce-prod/
-            └── mce-test-3/
-                └── ocp4-mce-roi.yaml
+        └── ...
 ```
 
-**Naming rules**:
-- Cluster YAML files: Must start with `ocp4-` and end with `.yaml`
-- MCE directories: Can be named anything (e.g., `mce-test-1`, `ocp4-mce-site1`)
-- MCE name is extracted from the **parent directory** of the YAML file
-- Site name is extracted **4 levels up** from the YAML file
+## YAML Output Format
 
----
-
-## How MCE and Site Extraction Works
-
-For a file at: `sites/site1/mce-tenant-clusters/mce-prod/ocp4-mce-site1/ocp4-roi-3.yaml`
-
-- **MCE name**: `ocp4-mce-site1` (parent directory)
-- **Site name**: `site1` (4 levels up)
-- **Cluster name**: `ocp4-roi-3` (filename without .yaml)
-
----
-
-## What Gets Added to YAML Files
-
-### Simple Script (`cluster_network_configurator.py`)
-Adds only the Networks section:
+The script updates cluster YAML files with:
 
 ```yaml
+vlanId: 120
 Networks:
-- number: 1
-  from:
-    segment: <mce-segment>
-  destention:
-    segment: <cluster-segment>
-  ports:
-  - port: 80
-    type: TCP
-  - port: 8080
-    type: UDP
-- number: 2
-  from:
-    segment: <cluster-segment>
-  destention:
-    segment: <mce-segment>
-  ports:
-  - port: 80
-    type: TCP
-  - port: 8080
-    type: UDP
+  - number: 1
+    domain: default
+    from:
+      segment: 192.168.110.0/24
+      system-name: mce-site1-prod
+    destination:
+      segment: 192.168.120.0/24
+      system-name: ocp4-cluster-1
+    ports:
+      - type: port
+        number: 80
+        protocol: TCP
+      - type: port
+        number: 8080
+        protocol: TCP
+  - number: 2
+    domain: default
+    from:
+      segment: 192.168.120.0/24
+      system-name: ocp4-cluster-1
+    destination:
+      segment: 192.168.110.0/24
+      system-name: mce-site1-prod
+    ports:
+      - type: port
+        number: 80
+        protocol: TCP
+      - type: port
+        number: 8080
+        protocol: TCP
 ```
-
-### Production Script (`cluster_network_auto_configurator_final.py`)
-Adds both vlanId and Networks:
-
-```yaml
-vlanId: 693
-Networks:
-- number: 1
-  from:
-    segment: <mce-segment>
-  destention:
-    segment: <cluster-segment>
-  ports:
-  - port: 80
-    type: TCP
-  - port: 8080
-    type: UDP
-- number: 2
-  from:
-    segment: <cluster-segment>
-  destention:
-    segment: <mce-segment>
-  ports:
-  - port: 80
-    type: TCP
-  - port: 8080
-    type: UDP
-```
-
----
-
-## Skip Logic - Already Configured Files
-
-Both scripts will **skip** files that already have:
-- `Networks:` section
-- `vlanId:` field
-
-**Simple script**: Shows warning and exits with error
-```
-Warning: Networks section already exists in <file>
-Skipping to avoid duplicates.
-```
-
-**Production script**: Logs warning and continues with other clusters
-```
-WARNING - Skipping ocp4-mce-roi.yaml: Already has Networks or vlanId configured
-```
-
----
 
 ## AutomaticAllocation Control
 
-Add this to any cluster YAML to prevent automatic configuration:
+To exclude a cluster from automatic processing, add this to the cluster YAML:
 
 ```yaml
-clusterName: ocp4-roi-3
-platform: agent
-AutomaticAllocation: false  # ← This cluster will be skipped
-...
+AutomaticAllocation: false
 ```
 
-The production script will skip these clusters and log:
-```
-⏭️ Skipping ocp4-roi-3: AutomaticAllocation is set to false
-```
+## VLAN Manager API Integration
 
----
+### Required Endpoints
 
-## API Integration
+- `POST /auth/login` - Authentication (optional, uses Basic Auth)
+- `GET /health` - Health check
+- `GET /segments?allocated=true` - Fetch allocated segments
+- `POST /allocate-vlan` - Allocate new VLAN
 
-Both scripts integrate with the VLAN Manager API (from `~/Documents/scripts/segments_2`):
+### Allocation Request Format
 
-**Endpoints used**:
-- `GET /health` - Check API availability
-- `POST /allocate-vlan` - Allocate segment for cluster
-- `GET /segments/search?q=<mce-name>` - Get MCE segment
-
-**Graceful fallback**: When API is unavailable, scripts use deterministic mock allocations:
-```
-⚠️ VLAN Manager API unavailable at http://localhost:8000/api
-Will use mock allocations for testing purposes
+```json
+{
+  "cluster_name": "ocp4-cluster-1",
+  "site": "site1",
+  "vrf": "Network1"
+}
 ```
 
----
+### Allocation Response Format
 
-## Command-Line Options (Production Script Only)
+```json
+{
+  "vlan_id": 120,
+  "cluster_name": "ocp4-cluster-1",
+  "site": "site1",
+  "segment": "192.168.120.0/24",
+  "epg_name": "backend-servers",
+  "vrf": "Network1",
+  "allocated_at": "2025-12-26T12:00:00Z"
+}
+```
+
+## Error Handling
+
+### Common Issues
+
+**Issue**: HTTP 503 error on `/allocate-vlan`
+- **Cause**: No available segments for the site/VRF combination
+- **Solution**: Add more unallocated segments in VLAN Manager for the site
+
+**Issue**: MCE segment not found
+- **Behavior**: Script continues and inserts vlanId only (Networks section skipped)
+- **Solution**: Allocate a VLAN segment for the MCE instance
+
+**Issue**: Authentication failed
+- **Cause**: Incorrect username/password
+- **Solution**: Verify `DEFAULT_API_USERNAME` and `DEFAULT_API_PASSWORD` match VLAN Manager credentials
+
+## Edge Cases Handled
+
+1. **MCE without allocated segment**: Script inserts `vlanId` only, skips `Networks` section
+2. **Multiple directory variants**: Supports both `mce-tenant-clusters` and `mce-tenant-cluster`
+3. **Cluster already allocated**: Returns existing allocation (idempotent)
+4. **AutomaticAllocation disabled**: Skips cluster processing
+5. **YAML anchors/aliases**: Uses deep copy to prevent YAML anchor creation
+
+## Output
+
+The script provides detailed logging:
+
+```
+23:36:27 - INFO - 🔍 Scanning for clusters in all sites...
+23:36:27 - INFO - Found 4 cluster(s)
+23:36:27 - INFO - ✅ VLAN Manager API is available at http://0.0.0.0:8000/api
+23:36:27 - INFO - 📦 Fetching all segments from VLAN manager...
+23:36:27 - INFO - ✅ Cached 10 segments
+23:36:27 - INFO - Processing cluster: ocp4-cluster-site2-1 (MCE: mce-site2-prod, Site: site2)
+23:36:27 - INFO - 🔄 ocp4-cluster-site2-1.yaml: Updated (vlanId=120)
+```
+
+## Development
+
+### Running Tests
 
 ```bash
---dry-run              # Test without making changes
---log-level LEVEL      # DEBUG, INFO, WARNING, ERROR
---api-url URL          # Custom VLAN manager API URL
+# Dry run to preview changes
+python3 cluster_network_auto_configurator_production.py --dry-run
+
+# Run on specific site (modify script to filter)
+python3 cluster_network_auto_configurator_production.py
 ```
 
----
+### Logging
 
-## Exit Codes
+Logs include:
+- Cluster scanning and discovery
+- API authentication status
+- VLAN allocation details
+- YAML update actions
+- Errors and warnings
 
-**Simple script**:
-- `0` - Success
-- `1` - Failure (file not found, already configured, etc.)
+## Files
 
-**Production script**:
-- `0` - All clusters processed successfully
-- `1` - One or more clusters had errors
-- `130` - User interrupted (Ctrl+C)
+- `cluster_network_auto_configurator_production.py` - Main production script
+- `README.md` - This documentation
+- `.gitignore` - Git ignore rules
 
----
+## License
 
-## Dependencies
+Internal use only.
 
-```bash
-pip install pyyaml requests
-```
+## Support
 
-Or use the virtual environment from segments_2:
-```bash
-source ~/Documents/scripts/segments_2/.venv/bin/activate
-```
-
----
-
-## Examples
-
-### Process single cluster manually
-```bash
-python cluster_network_configurator.py ocp4-roi-3 10.8.150.0/24
-```
-
-### Test production script without changes
-```bash
-python cluster_network_auto_configurator_final.py --dry-run
-```
-
-### Process all clusters in production
-```bash
-python cluster_network_auto_configurator_final.py
-```
-
-### Quiet mode (errors only)
-```bash
-python cluster_network_auto_configurator_final.py --log-level ERROR
-```
-
-### Verbose mode (debug everything)
-```bash
-python cluster_network_auto_configurator_final.py --log-level DEBUG
-```
-
----
-
-## Troubleshooting
-
-**Problem**: "Networks section already exists"
-**Solution**: Remove existing Networks/vlanId from YAML or use a fresh cluster
-
-**Problem**: "Could not extract MCE name"
-**Solution**: Verify directory structure matches: `sites/*/mce-tenant-clusters/*/MCE_NAME/ocp4-*.yaml`
-
-**Problem**: "VLAN Manager API unavailable"
-**Solution**: Normal - scripts will use mock allocations. Start the VLAN manager API for real allocations.
-
-**Problem**: Cluster not found by production script
-**Solution**: Ensure cluster YAML filename starts with `ocp4-` and is in correct directory structure
+For issues or questions, contact the infrastructure team.

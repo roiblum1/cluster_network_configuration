@@ -1,0 +1,78 @@
+clusterName: ocp4-roi-2
+platform: agent
+hostInventory: inventory
+nodepool:
+- name: ocp4-roi-2-dell-nodepool
+  replicas: 3
+  labels:
+    maxReplicas: '3'
+    minReplicas: '2'
+  agentLabelSelector:
+    nodeLabelKey: infraenvs.agent-install.openshift.io
+    nodeLabelValue: dell-infra
+  config:
+  - name: nm-conf-ocp4-roi-2-dell
+  - name: workers-chrony-configuration
+  - name: worker-kubeletconfig
+mcFiles:
+- nm-conf-ocp4-roi-2-dell
+- workers-chrony-configuration
+- worker-kubeletconfig
+dns:
+  site: datacenter-1
+  zone: example.company.com
+imageContentSources:
+- source: registry.redhat.io
+  mirrors:
+  - registry.internal.company.com/redhat
+- source: quay.io
+  mirrors:
+  - registry.internal.company.com/quay
+- source: registry.access.redhat.com
+  mirrors:
+  - registry.internal.company.com/access-redhat
+- source: registry.connect.redhat.com
+  mirrors:
+  - registry.internal.company.com/connect-redhat
+- source: ghcr.io
+  mirrors:
+  - registry.internal.company.com/ghcr
+- source: docker.io
+  mirrors:
+  - registry.internal.company.com/docker
+- source: gcr.io
+  mirrors:
+  - registry.internal.company.com/gcr
+- source: icr.io
+  mirrors:
+  - registry.internal.company.com/icr
+Networks:
+- number: 1
+  domain: default
+  from:
+    segment: 192.168.20.0/24
+    system_name: mce-test-2
+  destination:
+    segment: 192.168.140.0/24
+    system_name: ocp4-roi-2
+  ports:
+  - &id001
+    type: port
+    number: 80
+    protocol: TCP
+  - &id002
+    type: port
+    number: 8080
+    protocol: TCP
+- number: 2
+  domain: default
+  from:
+    segment: 192.168.140.0/24
+    system_name: ocp4-roi-2
+  destination:
+    segment: 192.168.20.0/24
+    system_name: mce-test-2
+  ports:
+  - *id001
+  - *id002
+vlanId: 140

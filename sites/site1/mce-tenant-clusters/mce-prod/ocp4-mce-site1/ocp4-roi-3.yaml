@@ -1,0 +1,77 @@
+clusterName: ocp4-roi-3
+platform: agent
+hostInventory: inventory
+nodepool:
+- name: ocp4-roi-3-dell-nodepool
+  replicas: 3
+  labels:
+    maxReplicas: '3'
+    minReplicas: '2'
+  agentLabelSelector:
+    nodeLabelKey: infraenvs.agent-install.openshift.io
+    nodeLabelValue: dell-infra
+  config:
+  - name: nm-conf-ocp4-roi-3-dell
+  - name: workers-chrony-configuration
+  - name: worker-kubeletconfig
+mcFiles:
+- nm-conf-ocp4-roi-3-dell
+- workers-chrony-configuration
+- worker-kubeletconfig
+imageContentSources:
+- source: registry.redhat.io
+  mirrors:
+  - registry.internal.company.com/redhat
+- source: quay.io
+  mirrors:
+  - registry.internal.company.com/quay
+- source: registry.access.redhat.com
+  mirrors:
+  - registry.internal.company.com/access-redhat
+- source: registry.connect.redhat.com
+  mirrors:
+  - registry.internal.company.com/connect-redhat
+- source: ghcr.io
+  mirrors:
+  - registry.internal.company.com/ghcr
+- source: docker.io
+  mirrors:
+  - registry.internal.company.com/docker
+- source: gcr.io
+  mirrors:
+  - registry.internal.company.com/gcr
+- source: icr.io
+  mirrors:
+  - registry.internal.company.com/icr
+vlanId: 120
+Networks:
+- number: 1
+  domain: default
+  from:
+    segment: 192.168.110.0/24
+    system_name: ocp4-mce-site1
+  destination:
+    segment: 192.168.120.0/24
+    system_name: ocp4-roi-3
+  ports:
+  - type: port
+    number: 80
+    protocol: TCP
+  - type: port
+    number: 8080
+    protocol: TCP
+- number: 2
+  domain: default
+  from:
+    segment: 192.168.120.0/24
+    system_name: ocp4-roi-3
+  destination:
+    segment: 192.168.110.0/24
+    system_name: ocp4-mce-site1
+  ports:
+  - type: port
+    number: 80
+    protocol: TCP
+  - type: port
+    number: 8080
+    protocol: TCP
