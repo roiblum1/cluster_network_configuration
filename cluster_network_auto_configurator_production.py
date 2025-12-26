@@ -57,9 +57,17 @@ DEFAULT_PORTS = [
 
 # Path Navigation
 SITE_LEVEL_UP = 4  # Levels from YAML file to site directory
-MCE_TENANT_DIR = "mce-tenant-clusters"
+MCE_TENANT_DIR_VARIANTS = ["mce-tenant-clusters", "mce-tenant-cluster"]
 MCE_ENVIRONMENTS = ["mce-prod", "mce-prep"]
 CLUSTER_FILE_PATTERN = "ocp4-*.yaml"
+
+# Skip MCEs - Easy to remove after initialization
+# Add MCE names here to skip them during processing (useful for prod clusters during initial setup)
+# REMOVE THIS LIST AFTER INITIALIZATION to process all clusters
+SKIP_MCES = [
+    # "mce-site1-prod",  # Example: uncomment to skip
+    # "ocp4-mce-site1",  # Example: uncomment to skip
+]
 
 # YAML Keys
 KEY_VLAN_ID = "vlanId"
@@ -149,8 +157,15 @@ def scan_all_clusters(sites_dir: Path, logger: logging.Logger) -> List[Tuple[str
             if not site_dir.is_dir():
                 continue
 
-            mce_tenant_dir = site_dir / MCE_TENANT_DIR
-            if not mce_tenant_dir.exists():
+            # Try both directory variants
+            mce_tenant_dir = None
+            for variant in MCE_TENANT_DIR_VARIANTS:
+                potential_dir = site_dir / variant
+                if potential_dir.exists():
+                    mce_tenant_dir = potential_dir
+                    break
+
+            if not mce_tenant_dir:
                 continue
 
             # Only check specific MCE environments
@@ -161,6 +176,12 @@ def scan_all_clusters(sites_dir: Path, logger: logging.Logger) -> List[Tuple[str
 
                 for mce_dir in env_dir.iterdir():
                     if not mce_dir.is_dir():
+                        continue
+
+                    # Skip MCEs in the skip list
+                    mce_name = mce_dir.name
+                    if mce_name in SKIP_MCES:
+                        logger.info(f"⏭️  Skipping MCE: {mce_name} (in SKIP_MCES list)")
                         continue
 
                     for yaml_file in mce_dir.glob(CLUSTER_FILE_PATTERN):
