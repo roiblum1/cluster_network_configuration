@@ -46,16 +46,37 @@ imageContentSources:
 - source: icr.io
   mirrors:
   - registry.internal.company.com/icr
+tuningConfigmap:
+- name: tuned-roi-2
+  tuning: |
+    apiVersion: tuned.openshift.io/v1
+    kind: Tuned
+    metadata:
+      name: tuned-roi-2
+      namespace: openshift-cluster-node-tuning-operator
+    spec:
+      profile:
+      - data: |
+          [main]
+          summary=Custom tuning profile for ROI-2
+          include=openshift-node
+          [disk]
+          devices=scini*
+          readahead=128
+        name: readahead
+      recommend:
+      - profile: readahead
+        priority: 20
 vlanId: 140
 Networks:
 - number: 1
   domain: default
   from:
     segment: 192.168.20.0/24
-    system_name: mce-test-2
+    system-name: mce-test-2
   destination:
     segment: 192.168.140.0/24
-    system_name: ocp4-roi-2
+    system-name: ocp4-roi-2
   ports:
   - type: port
     number: 80
@@ -71,10 +92,10 @@ Networks:
   domain: default
   from:
     segment: 192.168.140.0/24
-    system_name: ocp4-roi-2
+    system-name: ocp4-roi-2
   destination:
     segment: 192.168.20.0/24
-    system_name: mce-test-2
+    system-name: mce-test-2
   ports:
   - type: port
     number: 80

@@ -79,7 +79,7 @@ KEY_FROM = "from"
 KEY_DESTINATION = "destination"
 KEY_DESTENTION = "destention"  # Legacy typo support
 KEY_SEGMENT = "segment"
-KEY_SYSTEM_NAME = "system_name"
+KEY_SYSTEM_NAME = "system-name"
 KEY_CLUSTER_NAME = "cluster_name"
 
 
@@ -455,19 +455,47 @@ def update_cluster_yaml_smart(cluster_path: Path, vlan_id: str, mce_segment: Opt
             logger.info(f"DRY-RUN: Would {action} {cluster_path} with VLAN {vlan_id}")
             return True, action
 
-        # Update the YAML content
-        yaml_content[KEY_VLAN_ID] = int(vlan_id)
+        # Hybrid approach: Read original file, remove vlanId/Networks, then append new sections
+        with open(cluster_path, 'r', encoding='utf-8') as file:
+            original_lines = file.readlines()
 
-        # Only add Networks section if MCE segment is available
+        # Remove existing vlanId and Networks sections
+        new_content = []
+        skip_networks = False
+        for line in original_lines:
+            # Skip existing vlanId line
+            if line.strip().startswith('vlanId:'):
+                continue
+            # Skip existing Networks section
+            if line.strip().startswith('Networks:'):
+                skip_networks = True
+                continue
+            if skip_networks:
+                # Check if we're still in the Networks section (indented or dash lines)
+                if line.startswith((' ', '-')) or line.strip() == '':
+                    continue
+                else:
+                    skip_networks = False
+            new_content.append(line)
+
+        # Ensure last line ends with newline
+        if new_content and not new_content[-1].endswith('\n'):
+            new_content[-1] += '\n'
+
+        # Generate new sections using yaml.dump() for clean formatting
+        new_sections = {KEY_VLAN_ID: int(vlan_id)}
         if mce_segment and new_networks:
-            yaml_content[KEY_NETWORKS] = new_networks
-        elif not mce_segment and KEY_NETWORKS in yaml_content:
-            # Keep existing Networks if MCE segment not available
-            logger.warning(f"⚠️  MCE segment not found - keeping existing Networks section")
+            new_sections[KEY_NETWORKS] = new_networks
+        elif not mce_segment:
+            logger.warning(f"⚠️  MCE segment not found - will insert vlanId only")
 
-        # Write back with preserved formatting
+        # Dump new sections to YAML
+        new_yaml = yaml.dump(new_sections, default_flow_style=False, indent=2, sort_keys=False)
+
+        # Write back: original content + new sections
         with open(cluster_path, 'w', encoding='utf-8') as file:
-            yaml.dump(yaml_content, file, default_flow_style=False, indent=2, sort_keys=False)
+            file.writelines(new_content)
+            file.write(new_yaml)
 
         logger.info(f"{'🔄' if action == 'updated' else '➕'} {cluster_path.name}: {action.capitalize()} (vlanId={vlan_id})")
         return True, action
