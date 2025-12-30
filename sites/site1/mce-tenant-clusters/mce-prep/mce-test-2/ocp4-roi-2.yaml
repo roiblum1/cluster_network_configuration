@@ -46,6 +46,7 @@ imageContentSources:
 - source: icr.io
   mirrors:
   - registry.internal.company.com/icr
+vlanId: 140
 Networks:
 - number: 1
   domain: default
@@ -56,13 +57,15 @@ Networks:
     segment: 192.168.140.0/24
     system_name: ocp4-roi-2
   ports:
-  - &id001
-    type: port
+  - type: port
     number: 80
     protocol: TCP
-  - &id002
-    type: port
+  - type: port
     number: 8080
+    protocol: TCP
+  - type: range
+    start: 30000
+    end: 36000
     protocol: TCP
 - number: 2
   domain: default
@@ -73,6 +76,13 @@ Networks:
     segment: 192.168.20.0/24
     system_name: mce-test-2
   ports:
-  - *id001
-  - *id002
-vlanId: 140
+  - type: port
+    number: 80
+    protocol: TCP
+  - type: port
+    number: 8080
+    protocol: TCP
+  - type: range
+    start: 30000
+    end: 36000
+    protocol: TCP

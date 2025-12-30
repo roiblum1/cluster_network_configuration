@@ -54,6 +54,9 @@ DEFAULT_PORTS = [
     {"type": "port", "number": 80, "protocol": "TCP"},
     {"type": "port", "number": 8080, "protocol": "TCP"}
 ]
+DEFAULT_PORT_RANGES = [
+    {"type": "range", "start": 30000, "end": 36000, "protocol": "TCP"}
+]
 
 # Path Navigation
 SITE_LEVEL_UP = 4  # Levels from YAML file to site directory
@@ -235,35 +238,6 @@ def check_automatic_allocation_enabled(cluster_path: Path, logger: logging.Logge
 # API COMMUNICATION
 # ============================================================================
 
-def login_to_api(vlan_manager_url: str, session: requests.Session, logger: logging.Logger) -> bool:
-    """Login to VLAN Manager API and get session token"""
-    try:
-        url = f"{vlan_manager_url.rstrip('/')}/auth/login"
-        login_data = {
-            "username": DEFAULT_API_USERNAME,
-            "password": DEFAULT_API_PASSWORD
-        }
-
-        response = session.post(url, json=login_data, timeout=5)
-        response.raise_for_status()
-
-        result = response.json()
-        if result.get("success"):
-            token = result.get("token")
-            if token:
-                # Set the Authorization header for all future requests
-                session.headers.update({"Authorization": f"Bearer {token}"})
-                logger.info(f"✅ Successfully authenticated to VLAN Manager API")
-                return True
-
-        logger.error("❌ Login failed: No token received")
-        return False
-
-    except Exception as e:
-        logger.error(f"❌ Login failed: {e}")
-        return False
-
-
 def check_api_availability(vlan_manager_url: str, session: requests.Session, logger: logging.Logger) -> bool:
     """Check if the VLAN manager API is available"""
     try:
@@ -332,14 +306,14 @@ def allocate_vlan_segment(cluster_name: str, site: str, api_ctx: APIContext) -> 
                 api_ctx.logger.error(f"Invalid API response for {cluster_name}: missing segment or vlan_id")
                 return None, None
 
+        return None, None
+
     except APIException as e:
         api_ctx.logger.error(f"API error for {cluster_name}: {e}")
         return None, None
     except Exception as e:
         api_ctx.logger.error(f"Unexpected error allocating VLAN for {cluster_name}: {e}")
         return None, None
-
-    return None, None
 
 
 def fetch_all_segments(vlan_manager_url: str, session: requests.Session,
@@ -393,6 +367,11 @@ def get_mce_segment(mce_name: str, api_ctx: APIContext) -> Optional[str]:
 # YAML UPDATE/REPLACE LOGIC
 # ============================================================================
 
+def get_default_ports_config() -> List[Dict]:
+    """Get combined ports configuration (single ports + ranges)"""
+    return copy.deepcopy(DEFAULT_PORTS) + copy.deepcopy(DEFAULT_PORT_RANGES)
+
+
 def _create_network_rule(number: int, from_segment: str, from_name: str,
                          to_segment: str, to_name: str) -> Dict:
     """Create a single network rule (DRY helper)"""
@@ -407,7 +386,7 @@ def _create_network_rule(number: int, from_segment: str, from_name: str,
             KEY_SEGMENT: to_segment,
             KEY_SYSTEM_NAME: to_name
         },
-        "ports": copy.deepcopy(DEFAULT_PORTS)
+        "ports": get_default_ports_config()
     }
 
 
