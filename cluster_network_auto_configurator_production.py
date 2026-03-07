@@ -59,9 +59,9 @@ DEFAULT_PORT_RANGES = [
 ]
 
 # Path Navigation
-SITE_LEVEL_UP = 4  # Levels from YAML file to site directory
-MCE_TENANT_DIR_VARIANTS = ["mce-tenant-clusters", "mce-tenant-cluster"]
-MCE_ENVIRONMENTS = ["mce-prod", "mce-prep"]
+SITE_LEVEL_UP = 4  # Levels from YAML file to site directory (same for both formats)
+MCE_TENANT_DIR = "mces"
+HOSTED_CLUSTERS_DIR = "hostedClusters"  # mces/<mce-name>/hostedClusters/ocp4-*.yaml
 CLUSTER_FILE_PATTERN = "ocp4-*.yaml"
 
 # Skip MCEs - Easy to remove after initialization
@@ -160,36 +160,27 @@ def scan_all_clusters(sites_dir: Path, logger: logging.Logger) -> List[Tuple[str
             if not site_dir.is_dir():
                 continue
 
-            # Try both directory variants
-            mce_tenant_dir = None
-            for variant in MCE_TENANT_DIR_VARIANTS:
-                potential_dir = site_dir / variant
-                if potential_dir.exists():
-                    mce_tenant_dir = potential_dir
-                    break
-
-            if not mce_tenant_dir:
+            mce_tenant_dir = site_dir / MCE_TENANT_DIR
+            if not mce_tenant_dir.exists():
                 continue
 
-            # Only check specific MCE environments
-            for env_name in MCE_ENVIRONMENTS:
-                env_dir = mce_tenant_dir / env_name
-                if not env_dir.exists():
+            # Format: mces/<mce-name>/hostedClusters/ocp4-*.yaml
+            for mce_dir in mce_tenant_dir.iterdir():
+                if not mce_dir.is_dir():
                     continue
 
-                for mce_dir in env_dir.iterdir():
-                    if not mce_dir.is_dir():
-                        continue
+                mce_name = mce_dir.name
+                if mce_name in SKIP_MCES:
+                    logger.info(f"⏭️  Skipping MCE: {mce_name} (in SKIP_MCES list)")
+                    continue
 
-                    # Skip MCEs in the skip list
-                    mce_name = mce_dir.name
-                    if mce_name in SKIP_MCES:
-                        logger.info(f"⏭️  Skipping MCE: {mce_name} (in SKIP_MCES list)")
-                        continue
+                hosted_dir = mce_dir / HOSTED_CLUSTERS_DIR
+                if not hosted_dir.exists():
+                    continue
 
-                    for yaml_file in mce_dir.glob(CLUSTER_FILE_PATTERN):
-                        cluster_name = yaml_file.stem
-                        clusters.append((cluster_name, yaml_file))
+                for yaml_file in hosted_dir.glob(CLUSTER_FILE_PATTERN):
+                    cluster_name = yaml_file.stem
+                    clusters.append((cluster_name, yaml_file))
 
     except Exception as e:
         logger.error(f"Error scanning directories: {e}")
@@ -199,9 +190,16 @@ def scan_all_clusters(sites_dir: Path, logger: logging.Logger) -> List[Tuple[str
 
 
 def extract_mce_name_from_path(cluster_path: Path) -> Optional[str]:
-    """Extract MCE name (parent directory)"""
+    """Extract MCE name from path.
+
+    Old format: .../mce-name/ocp4-*.yaml          -> parent is MCE name
+    New format: .../mce-name/hostedClusters/ocp4-*.yaml -> grandparent is MCE name
+    """
     try:
-        return cluster_path.parent.name
+        parent = cluster_path.parent
+        if parent.name == HOSTED_CLUSTERS_DIR:
+            return parent.parent.name
+        return parent.name
     except Exception:
         return None
 

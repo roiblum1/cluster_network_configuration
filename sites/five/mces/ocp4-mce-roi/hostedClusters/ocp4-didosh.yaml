@@ -1,33 +1,4 @@
-Networks:
-- number: 1
-  domain: default
-  from:
-    segment: 192.168.130.0/24
-    system_name: mce-test-1
-  destination:
-    segment: 192.168.10.0/24
-    system_name: ocp4-roi
-  ports:
-  - &id001
-    type: port
-    number: 80
-    protocol: TCP
-  - &id002
-    type: port
-    number: 8080
-    protocol: TCP
-- number: 2
-  domain: default
-  from:
-    segment: 192.168.10.0/24
-    system_name: ocp4-roi
-  destination:
-    segment: 192.168.130.0/24
-    system_name: mce-test-1
-  ports:
-  - *id001
-  - *id002
-clusterName: ocp4-roi
+clusterName: ocp4-didosh
 dns:
   site: site1
   zone: example.company.com
@@ -76,3 +47,42 @@ nodepool:
   replicas: 3
 platform: agent
 vlanId: 100
+Networks:
+- number: 1
+  domain: default
+  from:
+    segment: 192.168.10.0/24
+    system-name: ocp4-mce-roi
+  destination:
+    segment: 192.168.100.0/24
+    system-name: ocp4-didosh
+  ports:
+  - type: port
+    number: 80
+    protocol: TCP
+  - type: port
+    number: 8080
+    protocol: TCP
+  - type: range
+    start: 30000
+    end: 36000
+    protocol: TCP
+- number: 2
+  domain: default
+  from:
+    segment: 192.168.100.0/24
+    system-name: ocp4-didosh
+  destination:
+    segment: 192.168.10.0/24
+    system-name: ocp4-mce-roi
+  ports:
+  - type: port
+    number: 80
+    protocol: TCP
+  - type: port
+    number: 8080
+    protocol: TCP
+  - type: range
+    start: 30000
+    end: 36000
+    protocol: TCP

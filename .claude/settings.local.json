@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/home/roi/Documents/scripts/segments_2/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/src/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/src/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/src/api/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/src/services/**)",
+      "Read(/home/roi/Documents/scripts/segments_2/src/config/**)",
+      "Bash(python:*)",
+      "Bash(git checkout:*)",
+      "Bash(python3 -m py_compile:*)",
+      "Bash(python3:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
